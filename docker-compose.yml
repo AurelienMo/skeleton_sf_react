@@ -1,0 +1,65 @@
+version: "3.8"
+services:
+  db:
+    container_name: ${PREFIX_DOCKER_APP}_database
+    image: percona/percona-server
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - ':3306'
+    volumes:
+      - mysql:/var/lib/mysql
+      - ${MYSQL_DUMP_FOLDER}:/shared/dumps # This volume can be used to synchronize sql dump to mysql container
+    command: mysqld --sql_mode=""
+    restart: on-failure
+    networks:
+      - example_network #Must be define
+
+  www:
+    build:
+      context: docker/php
+      dockerfile: Dockerfile
+    container_name: ${PREFIX_DOCKER_APP}_www
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./docker/php/vhosts:/etc/apache2/sites-enabled
+      - ${API_FOLDER}:/var/www:rw
+      - ./docker/log-apache:/var/log/apache2
+      - cache:/var/www/var/cache:rw
+      - ./docker/log-symfony:/var/www/var/log:rw
+      - ./docker/php/conf.ini/custom-php.ini:/usr/local/etc/php/conf.d/custom-php.ini:delegated
+    restart: on-failure
+    networks:
+      - example_network #Must be define
+
+  front-react:
+    image: node:18
+    ports:
+      - "3001:3000"
+    container_name: ${PREFIX_DOCKER_APP}_front
+    working_dir: /var/www
+    stdin_open: true
+    environment:
+      - WDS_SOCKET_HOST=127.0.0.1
+      - WDS_SOCKET_PORT=3001
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    volumes:
+      - ${FRONT_REACT_FOLDER}:/var/www
+    networks:
+      - example_network #Must be define
+
+volumes:
+  mysql: # Be careful with this volume name, volume name must be different on each project. This volume name used on line 14
+    driver: local
+    name: mysql_example
+  cache:
+    name: cache_example # Be careful, this volume name must be changed between each project
+
+networks:
+  example_network: # must be define and match with all networks keys used
